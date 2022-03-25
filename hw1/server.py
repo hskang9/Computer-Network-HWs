@@ -1,6 +1,6 @@
 from socket import *
 from os import listdir, mkdir, getcwd, remove
-from os.path import isfile, join, normpath, join
+from os.path import join, join
 import re
 from time import time
 
