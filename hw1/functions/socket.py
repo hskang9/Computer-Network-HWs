@@ -1,4 +1,5 @@
 from socket import *
+from sqlite3 import connect
 from functions.files import *
 from functions.view import *
 from functions.http import *
@@ -12,7 +13,39 @@ def init_socket():
     print('The server is ready to receive')
     return server_socket
 
+def process_storage(packet, login_cache, connectionSocket):
+    user = re.compile(b'(?<=name="id"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet)
+    if user != None: 
+        login_cache = process_login(packet, connectionSocket)
+    else:
+        print("upload request from /storage, change to upload")
+        login_cache = process_upload(packet, login_cache, connectionSocket)
+    return login_cache
+
+def process_login(packet, connectionSocket):
+    # get username and password
+    user = re.compile(b'(?<=name="id"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode()
+    pw = re.compile(b'(?<=name="pw"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode()
+    # Make personal storage
+    make_personal_directory(user)
+    # Save Cookie 
+    save_cookie(user)
+     # Edit storage.html
+    html = edit_user_storage_html(user)
+    send_http_response_html(connectionSocket, html)
+    return user
+
+def process_upload(packet, login_cache, connectionSocket):
+    # get user data
+    save_user_uploaded_file(packet, login_cache)
+    # Edit storage.html
+    html = edit_user_storage_html(login_cache)
+    send_http_response_html(connectionSocket, html)
+    return login_cache   
+
 def run_socket_connection(server_socket):
+    # recently logged in user
+    login_cache = ""
     while True:
         connectionSocket, addr = server_socket.accept()
         print('Accepted')
@@ -26,38 +59,37 @@ def run_socket_connection(server_socket):
     
         # Build router
         # Assignment says it does not care url so just put file names and let it show the content from html file
-        # Put Exceptions on user input
-        # when user logins
         if method == "GET":
-            if url == '/storage.html':
+            # Exceptions on user customized page
+            if url == '/storage':
+                # check cookie
+
+                # if it does not exist, go to 403 page
+                """
+                html = edit_storage_html()
+                response = 'HTTP/1.0 200 Ok\n\n' + content
+                socket.sendall(response.encode())
+                send_http_response_html(connectionSocket, html)
+                """
+                send_403(connectionSocket)
+                
+            elif url == "/":
+                send_http_response(connectionSocket, '/index.html')
+            
+            elif url.startswith('/delete'):
                 html = edit_storage_html()
                 send_http_response_html(connectionSocket, html)
-                
-            elif '?' not in url:
-                send_http_response(connectionSocket, url)
+
+            else:
+                send_404(connectionSocket)
         
 
         elif method == "POST":
-            if url == '/index.html':
+            if url == '/storage':
                 packet = get_post_data(connectionSocket)
-                #print(packet)
-                # get username and password
-                user = re.compile(b'(?<=id=)(.*?)(?=\&)').search(packet).group(1)
-                print(user)
-                pw = re.compile(b'(?<=pw=)(.*?)').search(packet).group(1)
-                print(pw)
-                # Make personal storage
-                make_personal_directory(user)
-                # Save Cookie 
-                save_cookie(user)
-                # Edit storage.html
-                html = edit_user_storage_html(user)
-                send_http_response_html(connectionSocket, html)
-            if url == '/storage.html':
-                packet = get_post_data(connectionSocket)
-                save_uploaded_file(packet)
-                name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
-                ok_reponse = b"Successfully uploaded " + name + b" to the server!"
-                connectionSocket.sendall(b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"+ok_reponse)   
+                print('packet')
+                print(packet)
+                login_cache = process_storage(packet, login_cache, connectionSocket)
+
 
         connectionSocket.close()

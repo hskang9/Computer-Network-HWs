@@ -7,9 +7,9 @@ def get_file_list(path):
 
 def make_personal_directory(username):
     try:
-        # make a dir inside files
+        # make a dir inside files/ directory
         curr_dir = getcwd()
-        result = join(curr_dir, f"files/{username}")
+        result = join(curr_dir, f"{username}")
         print(result)
         mkdir(result, 0o666)
     except FileExistsError:

@@ -1,6 +1,7 @@
 from socket import *
 import re
 
+
 def get_post_data(conn):
     data = b""
     while True:
@@ -9,7 +10,6 @@ def get_post_data(conn):
             return data + chunk
         else:
             data += chunk
-    return data
 
 def send_http_response(socket, filename):
     try:
@@ -21,14 +21,30 @@ def send_http_response(socket, filename):
     except IOError:
         print("html file does not exist on:", filename)
 
+def send_403(socket):
+    response = 'HTTP/1.0 403 Forbidden\n' + '<h1>Forbidden</h1>'
+    socket.sendall(response.encode())
+
+
+def send_404(socket):
+    response = 'HTTP/1.0 404 Not Found\n' + '<h1>Not Found</h1>'
+    socket.sendall(response.encode())
+
 def send_http_response_html(socket, html):
     response = 'HTTP/1.0 200 Ok\n\n' + html
     socket.sendall(response.encode())
 
 def save_uploaded_file(packet):
-    print("input")
-    print(packet)
     name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
     data = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)([\-]+WebKitFormBoundary)?")
     with open(f"files/{name.decode()}", "wb") as file:
         file.write(data.search(packet).group(3))
+
+def save_user_uploaded_file(packet, user):
+    name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
+    cut_front = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)([\-]+WebKitFormBoundary)?").search(packet).group(3)
+    # remove trailing boundary
+    data = re.compile(b'(.*)(?=\\r\\n------)').search(cut_front).group(1)
+    
+    with open(f"{user}/{name.decode()}", "wb") as file:
+        file.write(data)
