@@ -1,6 +1,6 @@
 from socket import *
 import re
-
+from time import time
 
 def get_post_data(conn):
     data = b""
@@ -34,12 +34,6 @@ def send_http_response_html(socket, html):
     response = 'HTTP/1.0 200 Ok\n\n' + html
     socket.sendall(response.encode())
 
-def save_uploaded_file(packet):
-    name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
-    data = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)([\-]+WebKitFormBoundary)?")
-    with open(f"files/{name.decode()}", "wb") as file:
-        file.write(data.search(packet).group(3))
-
 def save_user_uploaded_file(packet, user):
     name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
     cut_front = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)([\-]+WebKitFormBoundary)?").search(packet).group(3)
@@ -48,3 +42,10 @@ def save_user_uploaded_file(packet, user):
     
     with open(f"{user}/{name.decode()}", "wb") as file:
         file.write(data)
+
+def check_cookie(user):
+    cookieFS = open('cookies' + f'/{user}')
+    content = cookieFS.read()
+    cookieFS.close()
+    diff = (time() - float(content))
+    return diff <= 120

@@ -1,4 +1,4 @@
-from os import listdir, mkdir, getcwd
+from os import listdir, mkdir, getcwd, remove
 from os.path import isfile, join, normpath, join
 from time import time
 
@@ -17,5 +17,8 @@ def make_personal_directory(username):
 
 def save_cookie(user):
     with open(f"cookies/{user}", "wb") as file:
-        timestamp = f"Loggined time: {time()}"
+        timestamp = f"{time()}"
         file.write(timestamp.encode())
+
+def delete_file(user, file):
+    remove(f"{user}/{file}")

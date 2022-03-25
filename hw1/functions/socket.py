@@ -1,5 +1,4 @@
 from socket import *
-from sqlite3 import connect
 from functions.files import *
 from functions.view import *
 from functions.http import *
@@ -7,7 +6,7 @@ from functions.http import *
 def init_socket():
     serverPort = 10090
     server_socket = socket(AF_INET,SOCK_STREAM)
-    server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    server_socket.setsockopt(SOL_SOCKET, SO_KEEPALIVE, 1)
     server_socket.bind(('',serverPort))
     server_socket.listen(1)
     print('The server is ready to receive')
@@ -63,27 +62,37 @@ def run_socket_connection(server_socket):
             # Exceptions on user customized page
             if url == '/storage':
                 # check cookie
-
-                # if it does not exist, go to 403 page
-                """
-                html = edit_storage_html()
-                response = 'HTTP/1.0 200 Ok\n\n' + content
-                socket.sendall(response.encode())
-                send_http_response_html(connectionSocket, html)
-                """
-                send_403(connectionSocket)
+                if check_cookie(login_cache):
+                     html = edit_user_storage_html(login_cache)
+                     send_http_response_html(connectionSocket, html)
+                else:
+                    send_403(connectionSocket)
                 
             elif url == "/":
                 send_http_response(connectionSocket, '/index.html')
             
             elif url.startswith('/delete'):
-                html = edit_storage_html()
+                url_input = url.split('/')
+                user, file = url_input[2], url_input[3] 
+                # delete file 
+                delete_file(user, file)
+                html = edit_user_storage_html(login_cache)
                 send_http_response_html(connectionSocket, html)
+
+            # cookie management
+            elif url == '/cookie.html':
+                # send edited html
+                if check_cookie(login_cache):
+                    html = edit_user_cookie_html(login_cache)
+                    send_http_response_html(connectionSocket, html)
+                elif login_cache == "":
+                    send_403(connectionSocket)
+                else:
+                    send_http_response(connectionSocket, '/index.html')
 
             else:
                 send_404(connectionSocket)
         
-
         elif method == "POST":
             if url == '/storage':
                 packet = get_post_data(connectionSocket)
@@ -93,3 +102,4 @@ def run_socket_connection(server_socket):
 
 
         connectionSocket.close()
+    server_socket.close()
