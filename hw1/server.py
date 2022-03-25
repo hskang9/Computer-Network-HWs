@@ -1,7 +1,4 @@
 from functions.socket import *
-from functions.filelist import *
-from functions.http import *
-
 
 server_socket = init_socket()
 

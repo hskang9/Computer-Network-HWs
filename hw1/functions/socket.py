@@ -1,4 +1,7 @@
 from socket import *
+from functions.files import *
+from functions.view import *
+from functions.http import *
 
 def init_socket():
     serverPort = 10090
@@ -26,28 +29,35 @@ def run_socket_connection(server_socket):
         # Put Exceptions on user input
         # when user logins
         if method == "GET":
-            if url == '/index.html?id=':
-                send_http_response(connectionSocket, '/storage.html')
-
+            if url == '/storage.html':
+                html = edit_storage_html()
+                send_http_response_html(connectionSocket, html)
+                
             elif '?' not in url:
                 send_http_response(connectionSocket, url)
         
-            elif url == '/storage.html':
-                try:
-                    # get list of files in files directory
-                    filelist = get_the_file_list('../files')
-                    # edit storage.html
-                    htmlFS = open('html' + filename)
-                    send_http_response(connectionSocket, 'storage.html')
-                except IOError:
-                    print("files does not exist on files directory")
 
         elif method == "POST":
-            if url == 'storage.html':
+            if url == '/index.html':
                 packet = get_post_data(connectionSocket)
-                save_uploaded_file(f"files/{packet}")
-                print(packet)
-                ok_reponse = b"Successfully upload %d bytes to the server!" % len(packet)
+                #print(packet)
+                # get username and password
+                user = re.compile(b'(?<=id=)(.*?)(?=\&)').search(packet).group(1)
+                print(user)
+                pw = re.compile(b'(?<=pw=)(.*?)').search(packet).group(1)
+                print(pw)
+                # Make personal storage
+                make_personal_directory(user)
+                # Save Cookie 
+                save_cookie(user)
+                # Edit storage.html
+                html = edit_user_storage_html(user)
+                send_http_response_html(connectionSocket, html)
+            if url == '/storage.html':
+                packet = get_post_data(connectionSocket)
+                save_uploaded_file(packet)
+                name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
+                ok_reponse = b"Successfully uploaded " + name + b" to the server!"
                 connectionSocket.sendall(b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n"+ok_reponse)   
 
         connectionSocket.close()
