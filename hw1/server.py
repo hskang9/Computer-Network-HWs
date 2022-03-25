@@ -183,9 +183,8 @@ def run_socket_connection(server_socket):
         print(request)
         headers = request.split('\n')
         #print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
-        #print(headers[2]) # Connection: (keep-alive or smth)
-        method =  headers[0].split()[0]
-        url = headers[0].split()[1]
+        method =  headers[0].split()[0]  
+        url = headers[0].split()[1] 
     
         # Build router
         # Assignment says it does not care url so just put file names and let it show the content from html file
