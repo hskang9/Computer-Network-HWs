@@ -1,5 +1,5 @@
-# HW1
-
+# HW1 Report
+ 
 # 1. TCP로 웹서버 제작
 
 # 1-1. HTTP packet parsing
@@ -9,14 +9,22 @@ TCP는 HTTP의 기반이 되므로 HTTP 통신에 대한 정보를 여과 없이
 HTTP패킷을 파싱하여 메소드와 url을 끄집어 내는 코드는 아래와 같다.
 
 ```python
+def recv_http_data(conn):
+    data = b""
+    while True:
+        chunk = conn.recv(1024)
+        if len(chunk) < 1024:
+            return data + chunk
+        else:
+            data += chunk
+
+
 connectionSocket, addr = server_socket.accept()
-print('Accepted')
-request = connectionSocket.recv(1024).decode()
-print(request)
-headers = request.split('\n')
-print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
-method =  headers[0].split()[0] # method
-url = headers[0].split()[1] # url
+request = recv_http_data(connectionSocket)
+headers = request.split(b'\n')
+#print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
+method =  headers[0].split()[0]  
+url = headers[0].split()[1] 
 ```
 
 # 1-2. HTTP packet submission
@@ -81,7 +89,7 @@ def send_http_response(socket, filename):
         print("html file does not exist on:", filename)
 ```
 
-# 1-2. 서버 파일 삭제
+# 1-4. 서버 파일 삭제
 
 현재 우리가 사용하는 HTML5는 POST와 GET 메소드만 사용하고 있다. 따라서 url input을 이용한 GET 메소드로 처리해준다. 
 
@@ -125,9 +133,104 @@ def edit_user_storage_html(user):
     remove(f"{user}/{file}")
 ```
 
-# 1-3. 쿠키 관리 
+# 1-5. 쿠키 관리 
 
 쿠키는 로그인을 했을 시 `login_cache`에 현재 로그인한 유저 네임을 타임스탬프를 기록하여 `/cookie.html` GET request를 했을 시 타임스탬프가 보이게 한다.
+
+서버에서 유저와 관련된 url로 리퀘스트를 받을 때마다 `check_cookie` 함수를 실행시켜 다른 유저가 로그인 없이 storage에 접근하는 것을 막는다.
+
+```python
+def check_cookie(user):
+    if user == "":
+        return False
+    cookieFS = open('cookies' + f'/{user}')
+    content = cookieFS.read()
+    cookieFS.close()
+    diff = (time() - float(content))
+    return diff <= 120
+```
+
+`check_cookie`가 사용되는 url로는 /delete/*, /storage, /cookie.html 이 있다. 이들 모두 cookie가 만료되거나 로그인을 안했을 시 403 error를 보내게 한다.
+
+`/delete` 의 경우
+```python
+            elif url.startswith(b'/delete'):
+                if login_cache == "" or check_cookie(login_cache) == False:
+                    send_403(connectionSocket)
+                else:
+                    url_input = url.split(b'/')
+                    user, file = url_input[2], url_input[3] 
+                    # delete file 
+                    delete_file(user, file)
+                    html = edit_user_storage_html(login_cache)
+                    send_http_response_html(connectionSocket, html)
+```
+
+`/storage`의 경우
+```python
+            # Exceptions on user customized page
+            if url == b'/storage':
+                # check cookie
+                if check_cookie(login_cache):
+                     html = edit_user_storage_html(login_cache)
+                     send_http_response_html(connectionSocket, html)
+                else:
+                    login_cache = ""
+                    send_403(connectionSocket)
+```
+```python
+        elif method == b"POST":
+            if url == b'/storage':
+                if login_cache == "":
+                    send_403(connectionSocket)
+                else:
+                    login_cache = process_storage(request, login_cache, connectionSocket)
+```
+
+`/cookie.html`의 경우
+```python
+            # cookie management
+            elif url == b'/cookie.html':
+                # send edited html
+                if check_cookie(login_cache):
+                    html = edit_user_cookie_html(login_cache)
+                    send_http_response_html(connectionSocket, html)
+                elif login_cache == "":
+                    send_403(connectionSocket)
+                else:
+                    send_http_response(connectionSocket, '/index.html')
+```
+
+위와 같은 코드들로 처리한다.
+
+cookie.html 같은 경우 유저가 로그인 했을 때 타임스탬프를 찍어 리퀘스트를 보낸 시점의 차를 구해 cookie의 만료 시간을 결정한다.
+
+```python
+
+def edit_user_cookie_html(user):
+    # get list of files in files directory
+    filelist = get_file_list(f'{user}')
+    # edit storage.html
+    htmlFS = open('html' + '/cookie.html')
+    content = htmlFS.read()
+    htmlFS.close()
+
+    # replace user1 with received username
+    pattern = re.compile(r"user1")
+    change_user = pattern.sub(user, content)
+    
+    # find ul in storage.html with finding ul pattern
+    pattern = re.compile(r"27")
+    cookieFS = open('cookies/' + user)
+    content = cookieFS.read()
+    cookieFS.close()
+   
+    # replace time in html
+    tdiff = time() - float(content)
+    left = str(120 - tdiff)
+    result = pattern.sub(left, change_user)
+    return result
+```
 
 ## Appendix
 

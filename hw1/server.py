@@ -110,9 +110,7 @@ def edit_user_storage_html(user):
     return result
 
 def edit_user_cookie_html(user):
-    # get list of files in files directory
-    filelist = get_file_list(f'{user}')
-    # edit storage.html
+    # edit cookie.html
     htmlFS = open('html' + '/cookie.html')
     content = htmlFS.read()
     htmlFS.close()
@@ -199,13 +197,14 @@ def run_socket_connection(server_socket):
                      html = edit_user_storage_html(login_cache)
                      send_http_response_html(connectionSocket, html)
                 else:
+                    login_cache = ""
                     send_403(connectionSocket)
                 
             elif url == b"/":
                 send_http_response(connectionSocket, '/index.html')
             
             elif url.startswith(b'/delete'):
-                if login_cache == "":
+                if login_cache == "" or check_cookie(login_cache) == False:
                     send_403(connectionSocket)
                 else:
                     url_input = url.split(b'/')
