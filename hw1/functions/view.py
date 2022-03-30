@@ -26,8 +26,6 @@ def edit_user_storage_html(user):
     return result
 
 def edit_user_cookie_html(user):
-    # get list of files in files directory
-    filelist = get_file_list(f'{user}')
     # edit storage.html
     htmlFS = open('html' + '/cookie.html')
     content = htmlFS.read()

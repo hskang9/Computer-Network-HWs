@@ -16,10 +16,9 @@ def make_personal_directory(username):
         # make a dir inside files/ directory
         curr_dir = getcwd()
         result = join(curr_dir, f"{username}")
-        print(result)
         mkdir(result, 0o666)
     except FileExistsError:
-        print("user directory already exists, moving on")
+        print(f"user {username} directory already exists, moving on")
 
 def save_cookie(user):
     with open(f"cookies/{user}", "wb") as file:
@@ -27,13 +26,13 @@ def save_cookie(user):
         file.write(timestamp.encode())
 
 def delete_file(user, file):
-    remove(f"{user}/{file}")
+    remove(f"{user.decode()}/{file.decode()}")
 
 """
 http related functions
 """
 
-def get_post_data(conn):
+def recv_http_data(conn):
     data = b""
     while True:
         chunk = conn.recv(1024)
@@ -75,6 +74,8 @@ def save_user_uploaded_file(packet, user):
         file.write(data)
 
 def check_cookie(user):
+    if user == "":
+        return False
     cookieFS = open('cookies' + f'/{user}')
     content = cookieFS.read()
     cookieFS.close()
@@ -127,7 +128,9 @@ def edit_user_cookie_html(user):
     cookieFS.close()
    
     # replace time in html
-    result = pattern.sub(str(time() - float(content)), change_user)
+    tdiff = time() - float(content)
+    left = str(120 - tdiff)
+    result = pattern.sub(left, change_user)
     return result
 
 """
@@ -149,7 +152,9 @@ def process_storage(packet, login_cache, connectionSocket):
         login_cache = process_login(packet, connectionSocket)
     else:
         print("upload request from /storage, change to upload")
-        login_cache = process_upload(packet, login_cache, connectionSocket)
+        # get http post file inputs
+        file = recv_http_data(connectionSocket)
+        login_cache = process_upload(file, login_cache, connectionSocket)
     return login_cache
 
 def process_login(packet, connectionSocket):
@@ -178,19 +183,17 @@ def run_socket_connection(server_socket):
     login_cache = ""
     while True:
         connectionSocket, addr = server_socket.accept()
-        print('Accepted')
-        request = connectionSocket.recv(1024).decode()
-        print(request)
-        headers = request.split('\n')
+        request = recv_http_data(connectionSocket)
+        headers = request.split(b'\n')
         #print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
         method =  headers[0].split()[0]  
         url = headers[0].split()[1] 
     
         # Build router
         # Assignment says it does not care url so just put file names and let it show the content from html file
-        if method == "GET":
+        if method == b"GET":
             # Exceptions on user customized page
-            if url == '/storage':
+            if url == b'/storage':
                 # check cookie
                 if check_cookie(login_cache):
                      html = edit_user_storage_html(login_cache)
@@ -198,19 +201,22 @@ def run_socket_connection(server_socket):
                 else:
                     send_403(connectionSocket)
                 
-            elif url == "/":
+            elif url == b"/":
                 send_http_response(connectionSocket, '/index.html')
             
-            elif url.startswith('/delete'):
-                url_input = url.split('/')
-                user, file = url_input[2], url_input[3] 
-                # delete file 
-                delete_file(user, file)
-                html = edit_user_storage_html(login_cache)
-                send_http_response_html(connectionSocket, html)
+            elif url.startswith(b'/delete'):
+                if login_cache == "":
+                    send_403(connectionSocket)
+                else:
+                    url_input = url.split(b'/')
+                    user, file = url_input[2], url_input[3] 
+                    # delete file 
+                    delete_file(user, file)
+                    html = edit_user_storage_html(login_cache)
+                    send_http_response_html(connectionSocket, html)
 
             # cookie management
-            elif url == '/cookie.html':
+            elif url == b'/cookie.html':
                 # send edited html
                 if check_cookie(login_cache):
                     html = edit_user_cookie_html(login_cache)
@@ -223,12 +229,12 @@ def run_socket_connection(server_socket):
             else:
                 send_404(connectionSocket)
         
-        elif method == "POST":
-            if url == '/storage':
-                packet = get_post_data(connectionSocket)
-                print('packet')
-                print(packet)
-                login_cache = process_storage(packet, login_cache, connectionSocket)
+        elif method == b"POST":
+            if url == b'/storage':
+                if login_cache == "":
+                    send_403(connectionSocket)
+                else:
+                    login_cache = process_storage(request, login_cache, connectionSocket)
 
 
         connectionSocket.close()

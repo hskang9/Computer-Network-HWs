@@ -44,6 +44,8 @@ def save_user_uploaded_file(packet, user):
         file.write(data)
 
 def check_cookie(user):
+    if user == "":
+        return False
     cookieFS = open('cookies' + f'/{user}')
     content = cookieFS.read()
     cookieFS.close()
