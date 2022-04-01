@@ -1,0 +1,25 @@
+FN Clarivate Analytics Web of Science
+VR 1.0
+PT J
+AU Mealy, NE
+   Bayes, M
+   Lupone, B
+   Balcells, M
+AF Mealy, NE
+   Bayes, M
+   Lupone, B
+   Balcells, M
+TI Update 2006 - Treatment of psychiatric disorders - Treatment of
+   psychiatric disorders by condition
+SO DRUGS OF THE FUTURE
+SN 0377-8282
+PD MAR
+PY 2006
+VL 31
+IS 3
+BP 259
+EP 284
+UT WOS:000238175400007
+ER
+
+EF

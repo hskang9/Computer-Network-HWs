@@ -54,7 +54,7 @@ def recv_http_data(conn):
 
 def send_http_response(socket, filename):
     try:
-        htmlFS = open('html' + filename)
+        htmlFS = open(filename)
         content = htmlFS.read()
         htmlFS.close()
         response = 'HTTP/1.0 200 Ok\n\n' + content
@@ -196,16 +196,14 @@ def run_socket_connection(server_socket):
     while True:
         connectionSocket, addr = server_socket.accept()
         request = recv_http_data(connectionSocket)
-        print(request.decode("UTF-8"))
         headers = request.split(b'\n')
         #print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
         method =  headers[0].split()[0]  
         url = headers[0].split()[1] 
     
-        # Build router
-        # Assignment says it does not care url so just put file names and let it show the content from html file
+        # Router
         if method == b"GET":
-            # Exceptions on user customized page
+            # user storage page
             if url == b'/storage':
                 # check cookie
                 if check_cookie(login_cache):
@@ -215,9 +213,11 @@ def run_socket_connection(server_socket):
                     login_cache = ""
                     send_403(connectionSocket)
                 
+            # index page
             elif url == b"/":
-                send_http_response(connectionSocket, '/index.html')
+                send_http_response(connectionSocket, 'html/index.html')
             
+            # delete file in user storage
             elif url.startswith(b'/delete'):
                 if login_cache == "" or check_cookie(login_cache) == False:
                     send_403(connectionSocket)
@@ -232,7 +232,21 @@ def run_socket_connection(server_socket):
                         delete_file(user, file)
                         html = edit_user_storage_html(login_cache)
                         send_http_response_html(connectionSocket, html)
-
+            
+            # user file storage access
+            elif unquote(url).split('/')[1] in get_file_list("./"):
+                url_input = unquote(url).split('/')
+                user, file = url_input[1], url_input[2] 
+                # if not logged in or tries to access other user's file, show 403 error as PA1 describes
+                if login_cache != user:
+                    send_403(connectionSocket)
+                else:
+                    if len(url_input) > 3:
+                        send_404(connectionSocket)
+                    else:
+                        # retrieve file
+                        send_http_response(connectionSocket, f'{user}/{file}')
+                    
             # cookie management
             elif url == b'/cookie.html':
                 # send edited html
@@ -242,7 +256,7 @@ def run_socket_connection(server_socket):
                 elif login_cache == "":
                     send_403(connectionSocket)
                 else:
-                    send_http_response(connectionSocket, '/index.html')
+                    send_http_response(connectionSocket, 'html/index.html')
 
             else:
                 send_404(connectionSocket)
