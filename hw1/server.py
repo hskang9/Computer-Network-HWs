@@ -3,6 +3,7 @@ from os import listdir, mkdir, getcwd, remove
 from os.path import join, join
 import re
 from time import time
+from urllib.parse import unquote
 
 """
 file related functions
@@ -11,22 +12,32 @@ file related functions
 def get_file_list(path):
     return listdir(path)
 
-def make_personal_directory(username):
+def make_directory(username):
     try:
         # make a dir inside files/ directory
         curr_dir = getcwd()
         result = join(curr_dir, f"{username}")
-        mkdir(result, 0o666)
+        mkdir(result, 0o777)
     except FileExistsError:
         print(f"user {username} directory already exists, moving on")
 
 def save_cookie(user):
-    with open(f"cookies/{user}", "wb") as file:
-        timestamp = f"{time()}"
-        file.write(timestamp.encode())
+    # check if cookies directory exists
+    try:
+        with open(f"cookies/{user}", "wb") as file:
+            timestamp = f"{time()}"
+            file.write(timestamp.encode())
+    except IOError:
+        print("cookies/ directory does not exist, making one")
+        make_directory("cookies")
+    finally:
+        with open(f"cookies/{user}", "wb") as file:
+            timestamp = f"{time()}"
+            file.write(timestamp.encode())
+
 
 def delete_file(user, file):
-    remove(f"{user.decode()}/{file.decode()}")
+    remove(f"{user}/{file}")
 
 """
 http related functions
@@ -66,12 +77,11 @@ def send_http_response_html(socket, html):
 
 def save_user_uploaded_file(packet, user):
     name = re.compile(b'name="submitted_file"; filename="(.+)"').search(packet).group(1)
-    cut_front = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)([\-]+WebKitFormBoundary)?").search(packet).group(3)
-    # remove trailing boundary
-    data = re.compile(b'(.*)(?=\\r\\n------)').search(cut_front).group(1)
-    
-    with open(f"{user}/{name.decode()}", "wb") as file:
-        file.write(data)
+    cut_front = re.compile(b"WebKitFormBoundary((\n|.)*)Content-Type.+\n.+?\n((\n|.)*)\r\n------WebKitFormBoundary?").search(packet).group(3)
+    # save file
+    print(cut_front)
+    with open(f"{user}/{name.decode('UTF-8')}", "wb") as file:
+        file.write(cut_front)
 
 def check_cookie(user):
     if user == "":
@@ -149,18 +159,21 @@ def process_storage(packet, login_cache, connectionSocket):
     if user != None: 
         login_cache = process_login(packet, connectionSocket)
     else:
-        print("upload request from /storage, change to upload")
-        # get http post file inputs
-        file = recv_http_data(connectionSocket)
-        login_cache = process_upload(file, login_cache, connectionSocket)
+        if login_cache == "":
+            send_403(connectionSocket)
+        else:
+            print("upload request from /storage, change to upload")
+            # get http post file inputs
+            file = recv_http_data(connectionSocket)
+            login_cache = process_upload(file, login_cache, connectionSocket)
     return login_cache
 
 def process_login(packet, connectionSocket):
     # get username and password
-    user = re.compile(b'(?<=name="id"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode()
-    pw = re.compile(b'(?<=name="pw"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode()
+    user = re.compile(b'(?<=name="id"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode("UTF-8")
+    pw = re.compile(b'(?<=name="pw"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet).group(1).decode("UTF-8")
     # Make personal storage
-    make_personal_directory(user)
+    make_directory(user)
     # Save Cookie 
     save_cookie(user)
      # Edit storage.html
@@ -169,6 +182,7 @@ def process_login(packet, connectionSocket):
     return user
 
 def process_upload(packet, login_cache, connectionSocket):
+    print(packet)
     # get user data
     save_user_uploaded_file(packet, login_cache)
     # Edit storage.html
@@ -182,6 +196,7 @@ def run_socket_connection(server_socket):
     while True:
         connectionSocket, addr = server_socket.accept()
         request = recv_http_data(connectionSocket)
+        print(request.decode("UTF-8"))
         headers = request.split(b'\n')
         #print(headers[0]) # <CODE(GET/PUT/POST/DELETE)> <URL> <HTTP Connection version>
         method =  headers[0].split()[0]  
@@ -207,12 +222,16 @@ def run_socket_connection(server_socket):
                 if login_cache == "" or check_cookie(login_cache) == False:
                     send_403(connectionSocket)
                 else:
-                    url_input = url.split(b'/')
-                    user, file = url_input[2], url_input[3] 
-                    # delete file 
-                    delete_file(user, file)
-                    html = edit_user_storage_html(login_cache)
-                    send_http_response_html(connectionSocket, html)
+                    # unquote url input to unicode string
+                    url_input = unquote(url).split('/')
+                    if len(url_input) > 4:
+                        send_404(connectionSocket)
+                    else:
+                        user, file = url_input[2], url_input[3] 
+                        # delete file 
+                        delete_file(user, file)
+                        html = edit_user_storage_html(login_cache)
+                        send_http_response_html(connectionSocket, html)
 
             # cookie management
             elif url == b'/cookie.html':
@@ -230,10 +249,7 @@ def run_socket_connection(server_socket):
         
         elif method == b"POST":
             if url == b'/storage':
-                if login_cache == "":
-                    send_403(connectionSocket)
-                else:
-                    login_cache = process_storage(request, login_cache, connectionSocket)
+                login_cache = process_storage(request, login_cache, connectionSocket)
 
 
         connectionSocket.close()

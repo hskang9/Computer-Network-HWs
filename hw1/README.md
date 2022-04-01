@@ -119,18 +119,27 @@ def edit_user_storage_html(user):
     return result
 ```
 
-그 후 서버 측에서 url input을 받아 서버 디렉토리에서 삭제시켜준다.
+그 후 서버 측에서 url input을 받아 서버 디렉토리에서 삭제시켜준다. url input이 띄어쓰기나 파일 이름에 쓰일 수 있는 다양한 표기들을 url에서는 %20(' ') 와 같이 다르게 표현하기 때문에 `urllib` 모듈을 이용해서 파싱을 해준다.
 ```python
-            elif url.startswith('/delete'):
-                url_input = url.split('/')
-                user, file = url_input[2], url_input[3] 
-                # delete file 
-                delete_file(user, file)
-                html = edit_user_storage_html(login_cache)
-                send_http_response_html(connectionSocket, html)
-
-    def delete_file(user, file):
+def delete_file(user, file):
     remove(f"{user}/{file}")
+elif url.startswith(b'/delete'):
+                if login_cache == "" or check_cookie(login_cache) == False:
+                    send_403(connectionSocket)
+                else:
+                    # unquote url input to unicode string
+                    url_input = unquote(url).split('/')
+                    if len(url_input) > 4:
+                        send_404(connectionSocket)
+                    else:
+                        user, file = url_input[2], url_input[3] 
+                        # delete file 
+                        delete_file(user, file)
+                        html = edit_user_storage_html(login_cache)
+                        send_http_response_html(connectionSocket, html)
+
+
+
 ```
 
 # 1-5. 쿠키 관리 
@@ -179,12 +188,19 @@ def check_cookie(user):
                     send_403(connectionSocket)
 ```
 ```python
-        elif method == b"POST":
-            if url == b'/storage':
-                if login_cache == "":
-                    send_403(connectionSocket)
-                else:
-                    login_cache = process_storage(request, login_cache, connectionSocket)
+def process_storage(packet, login_cache, connectionSocket):
+    user = re.compile(b'(?<=name="id"\\r\\n\\r\\n)(.*?)(?=\\r\\n------)').search(packet)
+    if user != None: 
+        login_cache = process_login(packet, connectionSocket)
+    else:
+        if login_cache == "": #POST request를 로그인 없이 새로고침으로 보낼 때
+            send_403(connectionSocket)
+        else:
+            print("upload request from /storage, change to upload")
+            # get http post file inputs
+            file = recv_http_data(connectionSocket)
+            login_cache = process_upload(file, login_cache, connectionSocket)
+    return login_cache
 ```
 
 `/cookie.html`의 경우
